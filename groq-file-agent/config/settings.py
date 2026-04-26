@@ -6,4 +6,4 @@ MAX_FILE_SIZE_MB = 5
 ALLOWED_EXTENSIONS = [".txt", ".md", ".py", ".json", ".csv", ".yaml"]
 
 MAX_FILE_SIZE_BYTES = int(MAX_FILE_SIZE_MB * 1024 * 1024)
-DESTRUCTIVE_TOOLS = {"write_file", "delete_file", "move_file"}
+DESTRUCTIVE_TOOLS = {"write_file", "delete_file", "move_file", "execute_code"}

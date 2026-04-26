@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import html.parser
 import json
+import re
 import shutil
 import socket
+import subprocess
+import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -324,6 +328,45 @@ def batch_read_files(paths: list[str]) -> ToolResult:
         "files": files,
         "errors": errors,
     })
+
+
+_BLOCKED_PATTERNS: list[tuple[str, str]] = [
+    (r"\bos\.system\b",                          "os.system()"),
+    (r"\bsubprocess\b",                           "subprocess module"),
+    (r"\bshutil\.rmtree\b",                       "shutil.rmtree()"),
+    (r"""open\s*\([^)]*['"](w|a|x|wb|ab|xb)['"]""", "open() in write/append/create mode"),
+]
+
+
+def execute_code(code: str, language: str = "python") -> ToolResult:
+    if language != "python":
+        return ToolResult(False, error=f"Only 'python' is supported. Got: '{language}'")
+
+    for pattern, label in _BLOCKED_PATTERNS:
+        if re.search(pattern, code):
+            return ToolResult(False, error=f"Blocked: code contains a disallowed operation — {label}")
+
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return ToolResult(True, data={
+            "exit_code": proc.returncode,
+            "output": proc.stdout,
+            "stderr": proc.stderr,
+            "execution_time_ms": elapsed_ms,
+            "language": language,
+        })
+    except subprocess.TimeoutExpired:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return ToolResult(False, error=f"Execution timed out after 10 s ({elapsed_ms} ms elapsed)")
+    except Exception as exc:
+        return ToolResult(False, error=f"Execution failed: {exc}")
 
 
 class _DDGParser(html.parser.HTMLParser):
@@ -653,6 +696,33 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_code",
+            "description": (
+                "Execute Python code in a subprocess and return stdout, stderr, exit code, "
+                "and execution time. DESTRUCTIVE: runs arbitrary code on the host device. "
+                "Only use after showing the code to the user and receiving explicit confirmation. "
+                "Blocked patterns: os.system, subprocess, shutil.rmtree, open() in write/append mode. "
+                "Execution is killed after 10 seconds."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python source code to execute.",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Programming language. Only 'python' is currently supported. Default: 'python'.",
+                    },
+                },
+                "required": ["code"],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -672,6 +742,7 @@ _TOOL_REGISTRY: dict[str, Any] = {
     "search_in_files": search_in_files,
     "batch_read_files": batch_read_files,
     "search_web": search_web,
+    "execute_code": execute_code,
 }
 
 
