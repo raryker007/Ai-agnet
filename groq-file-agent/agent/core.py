@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from config.settings import DESTRUCTIVE_TOOLS, FALLBACK_MODEL, MAX_TOKENS, PRIMARY_MODEL, TEMPERATURE
+from agent.memory import SessionMemory
 from agent.tools import ToolResult, execute_tool, get_tool_schemas, set_working_directory
 
 console = Console()
@@ -28,6 +29,13 @@ class FileAgent:
         work_dir = Path(working_directory).resolve() if working_directory else Path.cwd()
         set_working_directory(work_dir)
         self.working_directory = work_dir
+
+        self.memory = SessionMemory()
+        if self.memory.load_session():
+            ctx = self.memory.context_summary()
+            if ctx:
+                self.system_prompt += f"\n\n## Previous Session Context\n{ctx}"
+            console.print("[dim cyan]Resuming previous session...[/dim cyan]")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -133,6 +141,20 @@ class FileAgent:
                     "content": result_json,
                     "tool_call_id": tc.id,
                 })
+
+    def close(self) -> None:
+        intents = [
+            m["content"]
+            for m in self.conversation_history
+            if m.get("role") == "user" and isinstance(m.get("content"), str)
+        ]
+        files = list({
+            str(v)
+            for entry in self.operation_log
+            for v in entry["args"].values()
+            if isinstance(v, str) and v and ("/" in v or "." in v)
+        })
+        self.memory.save_session(new_intents=intents, new_files=files)
 
     def display_operation_log(self) -> None:
         if not self.operation_log:

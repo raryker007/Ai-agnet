@@ -54,6 +54,7 @@ def main() -> None:
         except Exception as exc:
             console.print(f"\n[bold red]Error:[/bold red] {exc}")
 
+    agent.close()
     agent.display_operation_log()
     console.print("[dim]Goodbye.[/dim]")
 

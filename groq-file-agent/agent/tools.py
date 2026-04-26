@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -321,6 +322,60 @@ def batch_read_files(paths: list[str]) -> ToolResult:
     })
 
 
+def search_web(query: str) -> ToolResult:
+    try:
+        import requests  # noqa: PLC0415
+    except ImportError:
+        return ToolResult(False, error="'requests' package is not installed. Run: pip install requests>=2.31.0")
+
+    url = (
+        "https://api.duckduckgo.com/"
+        f"?q={urllib.parse.quote_plus(query)}&format=json&no_html=1&skip_disambig=1"
+    )
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "groq-file-agent/1.0"})
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.exceptions.Timeout:
+        return ToolResult(False, error="Search request timed out after 10 s. Try again.")
+    except requests.exceptions.ConnectionError:
+        return ToolResult(False, error="Network error: could not reach DuckDuckGo API.")
+    except requests.exceptions.HTTPError as exc:
+        return ToolResult(False, error=f"Search API returned HTTP error: {exc}")
+    except Exception as exc:
+        return ToolResult(False, error=f"Search failed: {exc}")
+
+    results: list[dict[str, str]] = []
+
+    abstract = data.get("AbstractText", "").strip()
+    abstract_url = data.get("AbstractURL", "").strip()
+    if abstract and abstract_url:
+        results.append({
+            "title": data.get("Heading", query),
+            "snippet": abstract,
+            "url": abstract_url,
+        })
+
+    for topic in data.get("RelatedTopics", []):
+        if len(results) >= 3:
+            break
+        if "Topics" in topic:
+            continue
+        text = topic.get("Text", "").strip()
+        first_url = topic.get("FirstURL", "").strip()
+        if not text or not first_url:
+            continue
+        title = text.split(" - ")[0][:80] if " - " in text else text[:80]
+        results.append({"title": title, "snippet": text, "url": first_url})
+
+    return ToolResult(True, data={
+        "query": query,
+        "result_count": len(results),
+        "results": results[:3],
+        "note": "No results found." if not results else None,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Schema definitions (OpenAI function-calling format)
 # ---------------------------------------------------------------------------
@@ -558,6 +613,27 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": (
+                "Search the web using DuckDuckGo and return the top 3 results. "
+                "Each result includes a title, a short snippet, and a URL. "
+                "Safe, read-only operation — does not modify any files."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query string.",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -576,6 +652,7 @@ _TOOL_REGISTRY: dict[str, Any] = {
     "get_file_info": get_file_info,
     "search_in_files": search_in_files,
     "batch_read_files": batch_read_files,
+    "search_web": search_web,
 }
 
 
