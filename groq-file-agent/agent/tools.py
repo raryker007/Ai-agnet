@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import html.parser
 import json
 import shutil
+import socket
+import urllib.error
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -322,57 +326,72 @@ def batch_read_files(paths: list[str]) -> ToolResult:
     })
 
 
-def search_web(query: str) -> ToolResult:
-    try:
-        import requests  # noqa: PLC0415
-    except ImportError:
-        return ToolResult(False, error="'requests' package is not installed. Run: pip install requests>=2.31.0")
+class _DDGParser(html.parser.HTMLParser):
+    """Extracts <a class="result__a"> links from DuckDuckGo HTML results."""
 
-    url = (
-        "https://api.duckduckgo.com/"
-        f"?q={urllib.parse.quote_plus(query)}&format=json&no_html=1&skip_disambig=1"
+    def __init__(self) -> None:
+        super().__init__()
+        self.results: list[dict[str, str]] = []
+        self._capturing: bool = False
+        self._href: str = ""
+        self._title_buf: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a" or len(self.results) >= 3:
+            return
+        attr_map = dict(attrs)
+        classes = (attr_map.get("class") or "").split()
+        if "result__a" in classes:
+            self._capturing = True
+            self._href = attr_map.get("href") or ""
+            self._title_buf = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._capturing:
+            self._capturing = False
+            title = "".join(self._title_buf).strip()
+            url = _ddg_real_url(self._href)
+            if title and url:
+                self.results.append({"title": title, "url": url})
+
+    def handle_data(self, data: str) -> None:
+        if self._capturing:
+            self._title_buf.append(data)
+
+
+def _ddg_real_url(href: str) -> str:
+    """Unwrap DDG redirect URLs to get the actual destination URL."""
+    parsed = urllib.parse.urlparse(href)
+    qs = urllib.parse.parse_qs(parsed.query)
+    uddg = qs.get("uddg", [])
+    return urllib.parse.unquote(uddg[0]) if uddg else href
+
+
+def search_web(query: str) -> ToolResult:
+    url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote_plus(query)}"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 groq-file-agent/1.0"}
     )
     try:
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "groq-file-agent/1.0"})
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.exceptions.Timeout:
-        return ToolResult(False, error="Search request timed out after 10 s. Try again.")
-    except requests.exceptions.ConnectionError:
-        return ToolResult(False, error="Network error: could not reach DuckDuckGo API.")
-    except requests.exceptions.HTTPError as exc:
-        return ToolResult(False, error=f"Search API returned HTTP error: {exc}")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+    except socket.timeout:
+        return ToolResult(False, error="Search timed out after 10 s.")
+    except urllib.error.HTTPError as exc:
+        return ToolResult(False, error=f"Search API returned HTTP {exc.code}: {exc.reason}")
+    except urllib.error.URLError as exc:
+        return ToolResult(False, error=f"Network error: {exc.reason}")
     except Exception as exc:
         return ToolResult(False, error=f"Search failed: {exc}")
 
-    results: list[dict[str, str]] = []
-
-    abstract = data.get("AbstractText", "").strip()
-    abstract_url = data.get("AbstractURL", "").strip()
-    if abstract and abstract_url:
-        results.append({
-            "title": data.get("Heading", query),
-            "snippet": abstract,
-            "url": abstract_url,
-        })
-
-    for topic in data.get("RelatedTopics", []):
-        if len(results) >= 3:
-            break
-        if "Topics" in topic:
-            continue
-        text = topic.get("Text", "").strip()
-        first_url = topic.get("FirstURL", "").strip()
-        if not text or not first_url:
-            continue
-        title = text.split(" - ")[0][:80] if " - " in text else text[:80]
-        results.append({"title": title, "snippet": text, "url": first_url})
+    parser = _DDGParser()
+    parser.feed(body)
 
     return ToolResult(True, data={
         "query": query,
-        "result_count": len(results),
-        "results": results[:3],
-        "note": "No results found." if not results else None,
+        "result_count": len(parser.results),
+        "results": parser.results,
+        "note": "No results found." if not parser.results else None,
     })
 
 
@@ -619,7 +638,7 @@ TOOL_SCHEMAS: list[dict] = [
             "name": "search_web",
             "description": (
                 "Search the web using DuckDuckGo and return the top 3 results. "
-                "Each result includes a title, a short snippet, and a URL. "
+                "Each result includes a title and a URL. "
                 "Safe, read-only operation — does not modify any files."
             ),
             "parameters": {

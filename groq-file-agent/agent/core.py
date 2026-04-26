@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from config.settings import DESTRUCTIVE_TOOLS, FALLBACK_MODEL, MAX_TOKENS, PRIMARY_MODEL, TEMPERATURE
+from config.settings import DESTRUCTIVE_TOOLS, MAX_TOKENS, PRIMARY_MODEL, TEMPERATURE
 from agent.memory import SessionMemory
 from agent.tools import ToolResult, execute_tool, get_tool_schemas, set_working_directory
 
@@ -109,24 +109,10 @@ class FileAgent:
 
     def run(self, user_message: str) -> str:
         self.conversation_history.append({"role": "user", "content": user_message})
-        model = PRIMARY_MODEL
 
         while True:
             with console.status("[bold yellow]Thinking...[/bold yellow]", spinner="dots"):
-                try:
-                    response = self._call_api(model)
-                except Exception as primary_err:
-                    if model == PRIMARY_MODEL:
-                        console.print(
-                            f"[dim yellow]Primary model unavailable ({primary_err}), "
-                            f"switching to {FALLBACK_MODEL}...[/dim yellow]"
-                        )
-                        model = FALLBACK_MODEL
-                        response = self._call_api(model)
-                    else:
-                        raise RuntimeError(
-                            f"Both models failed. Last error: {primary_err}"
-                        ) from primary_err
+                response = self._call_api(PRIMARY_MODEL)
 
             message = response.choices[0].message
             self.conversation_history.append(self._serialize_message(message))
