@@ -96,7 +96,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .clear-btn{background:none;border:1px solid var(--border);border-radius:9px;color:var(--t2);padding:5px 11px;font-size:.72rem;cursor:pointer;font-family:inherit;transition:color .2s,border-color .2s}
 .clear-btn:hover{color:#ef4444;border-color:#ef4444}
 
-#messages{flex:1;overflow-y:auto;padding:14px 15px 8px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;background:var(--bg)}
+#messages{flex:1;overflow-y:auto;padding:14px 15px 8px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;background:#fff}
 
 .msg-row{display:flex;align-items:flex-end;gap:8px;max-width:85%;animation:mIn .2s ease both}
 @keyframes mIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -106,7 +106,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .msg-body{display:flex;flex-direction:column;gap:3px}
 .bubble{padding:11px 14px;border-radius:17px;line-height:1.55;font-size:.87rem;white-space:pre-wrap;word-break:break-word}
 .msg-row.user .bubble{background:var(--grad);color:#fff;border-bottom-right-radius:4px;font-weight:500;box-shadow:var(--sh2)}
-.msg-row.agent .bubble{background:var(--white);color:var(--text);border-bottom-left-radius:4px;box-shadow:var(--sh)}
+.msg-row.agent .bubble{background:#f0f0f0;color:var(--text);border-bottom-left-radius:4px}
 .msg-time{font-size:.62rem;color:var(--t3);padding:0 2px}
 .msg-row.user .msg-time{text-align:right}
 .tool-pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
@@ -116,8 +116,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 #typing{display:none;align-items:flex-end;gap:8px;align-self:flex-start;animation:mIn .2s ease both}
 #typing.visible{display:flex}
-.typing-bub{background:var(--white);border-radius:17px;border-bottom-left-radius:4px;padding:12px 15px;display:flex;gap:5px;align-items:center;box-shadow:var(--sh)}
-.dot{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#4f6ef7,#7c3aed);animation:bounce 1.2s ease-in-out infinite}
+.typing-bub{background:#f0f0f0;border-radius:17px;border-bottom-left-radius:4px;padding:12px 15px;display:flex;gap:5px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:#bbb;animation:bounce 1.2s ease-in-out infinite}
 .dot:nth-child(2){animation-delay:.18s}
 .dot:nth-child(3){animation-delay:.36s}
 @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-6px);opacity:1}}
@@ -151,23 +151,51 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .files-empty{text-align:center;color:var(--t2);font-size:.82rem;padding:36px 0;grid-column:1/-1}
 
 /* ══ SETTINGS ══ */
-#panel-settings{padding:18px 16px;background:var(--bg)}
-.s-hero{text-align:center;padding:18px 0 14px}
-.s-hero-ico{font-size:2.6rem;margin-bottom:7px}
-.s-hero-title{font-size:1.05rem;font-weight:700;color:var(--text)}
-.s-hero-sub{font-size:.74rem;color:var(--t2);margin-top:3px}
-.s-card{background:var(--white);border-radius:var(--r);overflow:hidden;margin-bottom:12px;box-shadow:var(--sh)}
+#panel-settings{padding:4px 16px 20px;background:var(--bg)}
+.s-card{background:var(--white);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--sh)}
 .s-row{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--border)}
 .s-row:last-child{border-bottom:none}
 .s-row-ico{font-size:1rem;flex-shrink:0}
 .s-row-body{flex:1;min-width:0}
 .s-row-lbl{font-size:.67rem;color:var(--t2);margin-bottom:2px}
 .s-row-val{font-size:.8rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.danger-btn{width:100%;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:var(--r);color:#ef4444;padding:13px;font-size:.86rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;margin-bottom:16px}
+.danger-btn{width:100%;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:var(--r);color:#ef4444;padding:13px;font-size:.86rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;margin-bottom:10px;display:block}
 .danger-btn:hover{background:rgba(239,68,68,.15)}
-.about{background:var(--grad);border-radius:var(--r);padding:16px;box-shadow:var(--sh2)}
-.about-title{font-size:.86rem;font-weight:700;color:#fff;margin-bottom:5px}
-.about-txt{font-size:.76rem;color:rgba(255,255,255,.85);line-height:1.5}
+
+/* ── Chips ── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{background:#fff;border:1.5px solid rgba(79,110,247,.3);border-radius:20px;padding:5px 13px;font-size:.73rem;font-weight:600;color:var(--a1);cursor:pointer;font-family:inherit;transition:background .15s,border-color .2s}
+.chip:hover{background:rgba(79,110,247,.08)}
+
+/* ── Toast ── */
+#toast{position:fixed;top:calc(var(--hh) + 10px);left:50%;transform:translateX(-50%) translateY(-4px);background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:20px;padding:8px 18px;font-size:.8rem;font-weight:600;z-index:200;opacity:0;pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.1);transition:opacity .3s,transform .3s}
+#toast.visible{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+
+/* ══ SETTINGS (updated) ══ */
+.s-section-title{font-size:.75rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:16px 0 8px}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-top:4px}
+.toggle-lbl{font-size:.82rem;font-weight:600;color:var(--text)}
+.toggle-lbl.off{color:var(--t3)}
+.tgl-btn{width:44px;height:24px;border-radius:12px;background:var(--border);border:none;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0;padding:0}
+.tgl-btn::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .25s}
+.tgl-btn[aria-checked="true"]{background:var(--a1)}
+.tgl-btn[aria-checked="true"]::after{transform:translateX(20px)}
+.action-btn{width:100%;background:rgba(79,110,247,.07);border:1px solid rgba(79,110,247,.2);border-radius:var(--r);color:var(--a1);padding:13px;font-size:.86rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;margin-bottom:10px;display:block}
+.action-btn:hover{background:rgba(79,110,247,.14)}
+
+/* ── Log modal ── */
+#log-modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none;align-items:flex-end;backdrop-filter:blur(2px)}
+#log-modal.visible{display:flex}
+#log-panel{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-height:72dvh;display:flex;flex-direction:column;box-shadow:0 -4px 24px rgba(0,0,0,.12)}
+#log-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);font-size:.92rem;font-weight:700;flex-shrink:0;color:var(--text)}
+#log-close{background:var(--bg);border:none;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--t2);width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+#log-body{flex:1;overflow-y:auto;padding:12px 16px}
+.log-entry{background:var(--bg);border-radius:11px;padding:10px 12px;margin-bottom:8px}
+.log-op{font-size:.8rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px}
+.log-ok{color:#10b981}
+.log-err{color:#ef4444}
+.log-meta{font-size:.7rem;color:var(--t2);margin-top:3px}
+.log-empty{text-align:center;color:var(--t2);font-size:.83rem;padding:28px 0}
 
 /* ══ BOTTOM NAV ══ */
 #nav{position:fixed;bottom:0;left:0;right:0;height:var(--nh);background:var(--white);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 6px;z-index:50;box-shadow:0 -2px 12px rgba(0,0,0,.06)}
@@ -260,6 +288,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
         <div class="msg-av">🤖</div>
         <div class="msg-body">
           <div class="bubble">Hello! I'm your File Agent powered by Groq. I can read, write, search, analyse and summarise files. What would you like to do?</div>
+          <div class="chips">
+            <button class="chip" data-prompt="List the files in my working directory">Read a file</button>
+            <button class="chip" data-prompt="Search the web for ">Search web</button>
+            <button class="chip" data-prompt="Execute this Python code:&#10;```python&#10;&#10;```">Run code</button>
+          </div>
           <div class="msg-time">now</div>
         </div>
       </div>
@@ -289,24 +322,53 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
   <!-- SETTINGS -->
   <div class="panel" id="panel-settings">
-    <div class="s-hero">
-      <div class="s-hero-ico">⚙️</div>
-      <div class="s-hero-title">Settings</div>
-      <div class="s-hero-sub">AI Agent Configuration</div>
-    </div>
+    <div class="s-section-title">🧠 Model</div>
     <div class="s-card">
-      <div class="s-row"><div class="s-row-ico">🔑</div><div class="s-row-body"><div class="s-row-lbl">Session ID</div><div class="s-row-val" id="s-session">—</div></div></div>
-      <div class="s-row"><div class="s-row-ico">📂</div><div class="s-row-body"><div class="s-row-lbl">Working Directory</div><div class="s-row-val" id="s-workdir">—</div></div></div>
-      <div class="s-row"><div class="s-row-ico">🧠</div><div class="s-row-body"><div class="s-row-lbl">Primary Model</div><div class="s-row-val">llama-3.1-8b-instant</div></div></div>
-      <div class="s-row"><div class="s-row-ico">✦</div><div class="s-row-body"><div class="s-row-lbl">Fallback</div><div class="s-row-val">Gemini 2.5 Flash</div></div></div>
+      <div class="s-row">
+        <div class="s-row-ico">🤖</div>
+        <div class="s-row-body"><div class="s-row-lbl">Active Model</div><div class="s-row-val" id="s-model">llama-3.1-8b-instant</div></div>
+      </div>
+      <div class="s-row">
+        <div class="s-row-ico">⚡</div>
+        <div class="s-row-body">
+          <div class="s-row-lbl">Provider</div>
+          <div class="toggle-row">
+            <span class="toggle-lbl" id="tgl-groq">Groq</span>
+            <button class="tgl-btn" id="model-toggle" role="switch" aria-checked="false"></button>
+            <span class="toggle-lbl off" id="tgl-gemini">Gemini</span>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div class="s-section-title">🤖 Agent</div>
+    <div class="s-card">
+      <div class="s-row"><div class="s-row-ico">📂</div><div class="s-row-body"><div class="s-row-lbl">Working Directory</div><div class="s-row-val" id="s-workdir">—</div></div></div>
+      <div class="s-row"><div class="s-row-ico">🔑</div><div class="s-row-body"><div class="s-row-lbl">Session ID</div><div class="s-row-val" id="s-session">—</div></div></div>
+    </div>
+    <button class="action-btn" id="s-log-btn">📋 View Operation Log</button>
     <button class="danger-btn" id="s-clear-btn">🗑️ Clear Chat History</button>
-    <div class="about">
-      <div class="about-title">About AI Agent</div>
-      <div class="about-txt">A production-grade file agent built with Groq AI. Supports file operations, web search, code execution, and summarization with automatic Gemini fallback.</div>
+
+    <div class="s-section-title">ℹ️ About</div>
+    <div class="s-card">
+      <div class="s-row"><div class="s-row-ico">⏱️</div><div class="s-row-body"><div class="s-row-lbl">Uptime</div><div class="s-row-val" id="s-uptime">—</div></div></div>
+      <div class="s-row"><div class="s-row-ico">🔧</div><div class="s-row-body"><div class="s-row-lbl">Tools Available</div><div class="s-row-val">15 tools</div></div></div>
+      <div class="s-row"><div class="s-row-ico">📦</div><div class="s-row-body"><div class="s-row-lbl">Version</div><div class="s-row-val">1.0.0</div></div></div>
     </div>
   </div>
 
+</div>
+
+<div id="toast"></div>
+
+<div id="log-modal">
+  <div id="log-panel">
+    <div id="log-hdr">
+      <span>📋 Operation Log</span>
+      <button id="log-close">✕</button>
+    </div>
+    <div id="log-body"><div class="log-empty">No operations yet.</div></div>
+  </div>
 </div>
 
 <nav id="nav">
