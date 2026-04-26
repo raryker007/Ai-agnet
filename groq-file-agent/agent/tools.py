@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ast
+import csv
 import html.parser
 import json
+import os
 import re
 import shutil
 import socket
@@ -439,6 +442,179 @@ def search_web(query: str, **kwargs) -> ToolResult:
 
 
 # ---------------------------------------------------------------------------
+# Summarization helpers
+# ---------------------------------------------------------------------------
+
+_SUMMARY_CHUNK_SIZE = 2000
+_BATCH_LIMIT = 10
+
+
+def _call_llm_for_summary(text: str, style: str, context: str = "") -> str:
+    """Spawn a focused Groq call to summarise `text`. Never raises — falls back to a stub."""
+    try:
+        from groq import Groq as _GroqClient  # noqa: PLC0415
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        if not api_key:
+            return f"[LLM summary unavailable — GROQ_API_KEY not set. Content is {len(text.split())} words.]"
+        style_prompt = {
+            "brief":    "Write a concise 2-3 sentence summary",
+            "detailed": "Write a thorough multi-paragraph summary covering all key points",
+            "bullets":  "Write a bullet-point summary with 5-7 key points, each starting with '•'",
+        }.get(style, "Write a concise 2-3 sentence summary")
+        context_note = f" ({context})" if context else ""
+        prompt = f"{style_prompt} of the following content{context_note}:\n\n{text}"
+        client = _GroqClient(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.3,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        return f"[Summary generation failed: {exc}]"
+
+
+def _chunk_and_summarize(content: str, style: str, filename: str) -> str:
+    if len(content) <= _SUMMARY_CHUNK_SIZE:
+        return _call_llm_for_summary(content, style, filename)
+    stride = _SUMMARY_CHUNK_SIZE - 100
+    chunks = [content[i:i + _SUMMARY_CHUNK_SIZE] for i in range(0, len(content), stride)]
+    chunk_summaries = [
+        _call_llm_for_summary(chunk, "brief", f"{filename} — section {idx + 1}/{len(chunks)}")
+        for idx, chunk in enumerate(chunks)
+    ]
+    combined = "\n\n".join(chunk_summaries)
+    return _call_llm_for_summary(combined, style, f"{filename} — final pass over {len(chunks)} sections")
+
+
+def _extract_py_symbols(content: str) -> list[str]:
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    symbols: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            symbols.append(f"class {node.name}")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            symbols.append(f"def {node.name}()")
+    return symbols
+
+
+def _extract_json_keys(content: str) -> list[str]:
+    try:
+        data = json.loads(content)
+        if isinstance(data, dict):
+            return list(data.keys())
+        if isinstance(data, list):
+            return [f"[list with {len(data)} items]"]
+        return []
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+
+def _extract_csv_info(content: str) -> dict[str, Any]:
+    try:
+        reader = csv.reader(content.splitlines())
+        rows = list(reader)
+        if not rows:
+            return {"columns": [], "row_count": 0}
+        return {"columns": rows[0], "row_count": max(0, len(rows) - 1)}
+    except Exception:
+        return {"columns": [], "row_count": 0}
+
+
+def summarize_file(filepath: str, style: str = "brief") -> ToolResult:
+    valid_styles = {"brief", "detailed", "bullets"}
+    if style not in valid_styles:
+        return ToolResult(False, error=f"Invalid style '{style}'. Choose from: {sorted(valid_styles)}")
+
+    read_result = read_file(filepath)
+    if not read_result.success:
+        return ToolResult(False, error=read_result.error)
+
+    fp = Path(read_result.data["path"])
+    content: str = read_result.data["content"]
+    word_count_original = len(content.split())
+
+    summary = _chunk_and_summarize(content, style, fp.name)
+    word_count_summary = len(summary.split())
+    compression_ratio = round(word_count_summary / max(word_count_original, 1) * 100, 1)
+
+    result: dict[str, Any] = {
+        "filepath": str(fp),
+        "style": style,
+        "summary": summary,
+        "word_count_original": word_count_original,
+        "word_count_summary": word_count_summary,
+        "compression_ratio": compression_ratio,
+    }
+
+    ext = fp.suffix.lower()
+    if ext == ".py":
+        result["symbols"] = _extract_py_symbols(content)
+    elif ext == ".json":
+        result["top_level_keys"] = _extract_json_keys(content)
+    elif ext == ".csv":
+        result["csv_info"] = _extract_csv_info(content)
+
+    return ToolResult(True, data=result)
+
+
+def batch_summarize(directory: str, pattern: str = "*.txt", style: str = "brief") -> ToolResult:
+    valid_styles = {"brief", "detailed", "bullets"}
+    if style not in valid_styles:
+        return ToolResult(False, error=f"Invalid style '{style}'. Choose from: {sorted(valid_styles)}")
+
+    dp = _resolve(directory)
+    if not dp.exists():
+        return ToolResult(False, error=f"Directory not found: {dp}")
+    if not dp.is_dir():
+        return ToolResult(False, error=f"Path is not a directory: {dp}")
+
+    candidates = sorted(
+        fp for fp in dp.glob(pattern)
+        if fp.is_file() and fp.suffix.lower() in ALLOWED_EXTENSIONS
+    )
+
+    if not candidates:
+        return ToolResult(True, data={
+            "directory": str(dp),
+            "pattern": pattern,
+            "files_found": 0,
+            "summaries": [],
+            "errors": [],
+        })
+
+    batch = candidates[:_BATCH_LIMIT]
+    truncated = len(candidates) > _BATCH_LIMIT
+
+    summaries: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+
+    for fp in batch:
+        print(f"  Summarizing: {fp.name}...", flush=True)
+        file_result = summarize_file(str(fp), style)
+        if file_result.success:
+            summaries.append(file_result.data)
+        else:
+            errors.append({"file": str(fp), "error": file_result.error})
+
+    return ToolResult(True, data={
+        "directory": str(dp),
+        "pattern": pattern,
+        "style": style,
+        "files_found": len(candidates),
+        "files_processed": len(summaries),
+        "files_failed": len(errors),
+        "truncated_to": _BATCH_LIMIT if truncated else None,
+        "summaries": summaries,
+        "errors": errors,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Schema definitions (OpenAI function-calling format)
 # ---------------------------------------------------------------------------
 
@@ -723,6 +899,68 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_file",
+            "description": (
+                "Summarize the contents of a file using an LLM. Handles large files by chunking. "
+                "For .py files, also extracts function and class names. "
+                "For .json files, also extracts top-level keys. "
+                "For .csv files, also extracts column names and row count. "
+                "Returns the summary, original/summary word counts, and compression ratio. "
+                "Safe, read-only operation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {
+                        "type": "string",
+                        "description": "Path to the file to summarize.",
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": (
+                            "Summary style: 'brief' (2-3 sentences), "
+                            "'detailed' (full paragraph), or 'bullets' (bullet points). "
+                            "Default: 'brief'."
+                        ),
+                    },
+                },
+                "required": ["filepath"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "batch_summarize",
+            "description": (
+                "Summarize all matching files in a directory, up to 10 files per call. "
+                "Uses pathlib glob patterns to select files. "
+                "Returns a combined report with individual summaries, word counts, and any errors. "
+                "Safe, read-only operation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory to search for files to summarize.",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern to match files, e.g. '*.txt', '*.py', '*.md'. Default: '*.txt'.",
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": "Summary style for all files: 'brief', 'detailed', or 'bullets'. Default: 'brief'.",
+                    },
+                },
+                "required": ["directory"],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -743,6 +981,8 @@ _TOOL_REGISTRY: dict[str, Any] = {
     "batch_read_files": batch_read_files,
     "search_web": search_web,
     "execute_code": execute_code,
+    "summarize_file": summarize_file,
+    "batch_summarize": batch_summarize,
 }
 
 
