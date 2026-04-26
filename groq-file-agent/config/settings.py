@@ -1,4 +1,4 @@
-PRIMARY_MODEL = "llama-3.3-70b-versatile"
+PRIMARY_MODEL = "llama-3.1-8b-instant"
 # FALLBACK_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
