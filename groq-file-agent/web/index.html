@@ -387,6 +387,16 @@ const typingEl   = document.getElementById('typing');
 let toolsTotal   = 0;
 const recentMsgs = [];
 
+// ── Toast ─────────────────────────────────────────────────
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function showToast(msg, durationMs = 3000) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('visible'), durationMs);
+}
+
 // ── Tab switching ─────────────────────────────────────────
 function switchTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -395,6 +405,7 @@ function switchTab(tab) {
   document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add('active');
   if (tab === 'files')    loadFiles();
   if (tab === 'home')     refreshHome();
+  if (tab === 'settings') loadSettings();
   if (tab === 'chat')     chatInput.focus();
 }
 
@@ -406,6 +417,17 @@ document.getElementById('clear-btn').addEventListener('click',    clearSession);
 document.getElementById('s-clear-btn').addEventListener('click',  clearSession);
 document.getElementById('refresh-btn').addEventListener('click',  loadFiles);
 document.getElementById('s-session').textContent = SESSION_ID;
+
+// ── Chips (static + dynamic) ──────────────────────────────
+function wireChips(container) {
+  container.querySelectorAll('.chip[data-prompt]').forEach(c => {
+    c.addEventListener('click', () => {
+      chatInput.value = c.dataset.prompt;
+      autoGrow(); switchTab('chat'); chatInput.focus();
+    });
+  });
+}
+wireChips(document); // wire welcome message chips
 
 // ── Quick actions ─────────────────────────────────────────
 document.querySelectorAll('.qa-btn[data-prompt]').forEach(b => {
@@ -477,6 +499,22 @@ function appendMessage(role, content, { tools = [], gemini = false } = {}) {
     body.appendChild(pills);
   }
 
+  if (role === 'agent') {
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    [['Read a file','List the files in my working directory'],
+     ['Search web','Search the web for '],
+     ['Run code','Execute this Python code:\n```python\n\n```']
+    ].forEach(([label, prompt]) => {
+      const c = document.createElement('button');
+      c.className = 'chip'; c.textContent = label;
+      c.dataset.prompt = prompt;
+      chips.appendChild(c);
+    });
+    body.appendChild(chips);
+    wireChips(chips);
+  }
+
   const ts = document.createElement('div');
   ts.className = 'msg-time'; ts.textContent = fmtTime();
   body.appendChild(ts);
@@ -506,9 +544,27 @@ async function sendMessage() {
     });
     const data = await res.json();
     typingEl.classList.remove('visible');
-    if (data.error) {
+
+    const errStr = (data.error || '').toLowerCase();
+    if (errStr.includes('413') || errStr.includes('rate_limit') || errStr.includes('request_too_large')) {
+      showToast('⚡ Switching to Gemini 2.5 Flash…', 4000);
+      // retry once — backend will auto-fall back to Gemini on next call
+      const res2 = await fetch('/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+      });
+      const data2 = await res2.json();
+      if (data2.error) {
+        appendMessage('agent', '⚠️ Error: ' + data2.error);
+      } else {
+        toolsTotal += (data2.tools_used || []).length;
+        appendMessage('agent', data2.response, { tools: data2.tools_used || [], gemini: true });
+        updateStats();
+      }
+    } else if (data.error) {
       appendMessage('agent', '⚠️ Error: ' + data.error);
     } else {
+      if (data.gemini_used) showToast('⚡ Gemini 2.5 Flash used (Groq rate limited)', 3000);
       toolsTotal += (data.tools_used || []).length;
       appendMessage('agent', data.response, { tools: data.tools_used || [], gemini: data.gemini_used || false });
       updateStats();
@@ -561,6 +617,69 @@ function renderRecent() {
 
 function refreshHome() { updateStats(); renderRecent(); }
 
+// ── Settings ──────────────────────────────────────────────
+let geminiMode = false;
+
+async function loadSettings() {
+  try {
+    const res  = await fetch('/settings');
+    const data = await res.json();
+    if (data.model) document.getElementById('s-model').textContent = data.model;
+    if (data.directory) {
+      document.getElementById('s-workdir').textContent = data.directory;
+    }
+    if (data.uptime) document.getElementById('s-uptime').textContent = data.uptime;
+  } catch (_) {}
+}
+
+const modelToggle = document.getElementById('model-toggle');
+modelToggle.addEventListener('click', async () => {
+  geminiMode = !geminiMode;
+  modelToggle.setAttribute('aria-checked', String(geminiMode));
+  document.getElementById('tgl-groq').classList.toggle('off', geminiMode);
+  document.getElementById('tgl-gemini').classList.toggle('off', !geminiMode);
+  const model = geminiMode ? 'gemini-2.5-flash' : 'llama-3.1-8b-instant';
+  document.getElementById('s-model').textContent = model;
+  showToast(geminiMode ? '✦ Switched to Gemini 2.5 Flash' : '⚡ Switched to Groq llama-3.1-8b-instant', 2500);
+  await fetch('/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+  }).catch(() => {});
+});
+
+// ── Operation log modal ───────────────────────────────────
+document.getElementById('s-log-btn').addEventListener('click', loadLog);
+document.getElementById('log-close').addEventListener('click', () => {
+  document.getElementById('log-modal').classList.remove('visible');
+});
+document.getElementById('log-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('log-modal'))
+    document.getElementById('log-modal').classList.remove('visible');
+});
+
+async function loadLog() {
+  try {
+    const res  = await fetch('/log?session_id=' + SESSION_ID);
+    const data = await res.json();
+    const body = document.getElementById('log-body');
+    const entries = data.log || [];
+    if (!entries.length) { body.innerHTML = '<div class="log-empty">No operations yet.</div>'; }
+    else {
+      body.innerHTML = '';
+      entries.slice().reverse().forEach(e => {
+        const d = document.createElement('div'); d.className = 'log-entry';
+        const ok = e.success;
+        d.innerHTML = `<div class="log-op"><span class="${ok ? 'log-ok' : 'log-err'}">${ok ? '✓' : '✗'}</span>${e.operation}</div>
+          <div class="log-meta">${e.timestamp} · ${JSON.stringify(e.args).slice(0,60)}</div>`;
+        body.appendChild(d);
+      });
+    }
+    document.getElementById('log-modal').classList.add('visible');
+  } catch (_) {
+    showToast('⚠️ Could not load log', 2000);
+  }
+}
+
 // ── Load files ────────────────────────────────────────────
 async function loadFiles() {
   try {
@@ -599,6 +718,7 @@ async function loadFiles() {
 
 // ── Init ──────────────────────────────────────────────────
 loadFiles();
+loadSettings();
 </script>
 </body>
 </html>

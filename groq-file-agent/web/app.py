@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+_START_TIME = time.time()
+_ACTIVE_MODEL: str | None = None
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -95,6 +99,47 @@ def clear_session():
     if session_id in _sessions:
         _sessions[session_id].clear_history()
     return jsonify({"status": "cleared", "session_id": session_id})
+
+
+def _fmt_uptime(seconds: int) -> str:
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
+@app.route("/settings", methods=["GET"])
+def get_settings():
+    global _ACTIVE_MODEL
+    from config.settings import PRIMARY_MODEL
+    uptime_s = int(time.time() - _START_TIME)
+    return jsonify({
+        "model": _ACTIVE_MODEL or PRIMARY_MODEL,
+        "directory": _WORKING_DIR,
+        "uptime": _fmt_uptime(uptime_s),
+        "uptime_seconds": uptime_s,
+    })
+
+
+@app.route("/settings", methods=["POST"])
+def update_settings():
+    global _ACTIVE_MODEL
+    body = request.get_json(force=True, silent=True) or {}
+    model = (body.get("model") or "").strip()
+    if model:
+        _ACTIVE_MODEL = model
+    from config.settings import PRIMARY_MODEL
+    return jsonify({"model": _ACTIVE_MODEL or PRIMARY_MODEL, "status": "ok"})
+
+
+@app.route("/log", methods=["GET"])
+def get_log():
+    session_id = request.args.get("session_id", "default")
+    agent = _get_agent(session_id)
+    return jsonify({"log": agent.operation_log})
 
 
 if __name__ == "__main__":
