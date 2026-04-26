@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<title>AI Agent</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f4ff;--white:#fff;--card:#fff;
+  --a1:#4f6ef7;--a2:#7c3aed;
+  --grad:linear-gradient(135deg,#4f6ef7,#7c3aed);
+  --text:#1a1a2e;--t2:#6b7280;--t3:#9ca3af;
+  --border:#e5e7eb;--sh:0 2px 12px rgba(0,0,0,.08);
+  --sh2:0 4px 20px rgba(79,110,247,.25);
+  --r:16px;--hh:58px;--nh:66px;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
+
+/* ── Header ── */
+#hdr{position:fixed;top:0;left:0;right:0;height:var(--hh);background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:12px;z-index:50;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.logo-icon{width:34px;height:34px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.logo-text{flex:1;line-height:1.2}
+.logo-title{font-size:.92rem;font-weight:700;color:var(--text)}
+.logo-sub{font-size:.62rem;color:var(--t2)}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.notif{width:32px;height:32px;border-radius:9px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.88rem;cursor:pointer;position:relative}
+.notif-dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--a1);border:2px solid var(--white)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;cursor:pointer}
+
+/* ── Panels ── */
+#panels{position:fixed;top:var(--hh);bottom:var(--nh);left:0;right:0;overflow:hidden}
+.panel{position:absolute;inset:0;overflow-y:auto;opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .22s,transform .22s}
+.panel.active{opacity:1;pointer-events:auto;transform:translateY(0)}
+#panel-chat{display:flex;flex-direction:column;overflow:hidden}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ══ HOME ══ */
+#panel-home{padding:18px 16px 16px;background:var(--bg)}
+
+.hero{border-radius:20px;background:var(--grad);padding:22px 20px 20px;margin-bottom:20px;position:relative;overflow:hidden;box-shadow:var(--sh2)}
+.hero::before{content:'';position:absolute;top:-30px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.hero::after{content:'';position:absolute;bottom:-28px;right:16px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.07)}
+.hero-inner{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.hero-body{flex:1;z-index:1}
+.hero-label{font-size:.7rem;font-weight:600;color:rgba(255,255,255,.75);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
+.hero-title{font-size:1.25rem;font-weight:800;color:#fff;line-height:1.25;margin-bottom:6px}
+.hero-sub{font-size:.78rem;color:rgba(255,255,255,.8);line-height:1.4}
+.hero-emoji{font-size:3rem;z-index:1;flex-shrink:0;animation:float 3s ease-in-out infinite;filter:drop-shadow(0 4px 8px rgba(0,0,0,.2))}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.hero-btns{display:flex;gap:9px;z-index:1;position:relative}
+.btn-primary{background:#fff;color:var(--a1);border:none;border-radius:20px;padding:8px 16px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .2s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.btn-primary:hover{opacity:.88}
+.btn-outline{background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:20px;padding:8px 16px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;backdrop-filter:blur(4px);transition:background .2s}
+.btn-outline:hover{background:rgba(255,255,255,.28)}
+
+.sec-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.sec-title{font-size:.9rem;font-weight:700;color:var(--text)}
+.sec-link{font-size:.76rem;color:var(--a1);font-weight:600;cursor:pointer}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:20px}
+.stat{background:var(--white);border-radius:14px;padding:13px 10px;text-align:center;box-shadow:var(--sh)}
+.stat-ico{font-size:1.2rem;margin-bottom:5px}
+.stat-val{font-size:1.3rem;font-weight:800;color:var(--text);line-height:1}
+.stat-lbl{font-size:.62rem;color:var(--t2);margin-top:3px}
+
+.qa-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}
+.qa-btn{background:var(--white);border:none;border-radius:var(--r);padding:15px 13px;display:flex;align-items:center;gap:10px;cursor:pointer;box-shadow:var(--sh);transition:box-shadow .2s,transform .15s;font-family:inherit;text-align:left}
+.qa-btn:hover{box-shadow:0 4px 18px rgba(79,110,247,.15);transform:translateY(-1px)}
+.qa-btn:active{transform:scale(.97)}
+.qa-ico-wrap{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0}
+.qa-ico-blue{background:rgba(79,110,247,.12)}
+.qa-ico-purple{background:rgba(124,58,237,.12)}
+.qa-ico-green{background:rgba(16,185,129,.1)}
+.qa-ico-orange{background:rgba(245,158,11,.1)}
+.qa-text{flex:1}
+.qa-name{font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:2px}
+.qa-desc{font-size:.68rem;color:var(--t2)}
+
+.act-item{display:flex;align-items:center;gap:11px;background:var(--white);border-radius:13px;padding:12px 13px;margin-bottom:8px;cursor:pointer;box-shadow:var(--sh);transition:box-shadow .15s}
+.act-item:hover{box-shadow:0 4px 16px rgba(79,110,247,.12)}
+.act-av{width:36px;height:36px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0}
+.act-body{flex:1;min-width:0}
+.act-role{font-size:.68rem;color:var(--a1);font-weight:600;margin-bottom:2px}
+.act-txt{font-size:.8rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-time{font-size:.64rem;color:var(--t3)}
+.act-empty{text-align:center;color:var(--t2);font-size:.82rem;padding:20px 0}
+
+/* ══ CHAT ══ */
+.chat-strip{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.ca-info{display:flex;align-items:center;gap:9px}
+.ca-av{width:34px;height:34px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:.95rem}
+.ca-name{font-size:.86rem;font-weight:700;color:var(--text)}
+.ca-status{font-size:.65rem;color:#10b981}
+.clear-btn{background:none;border:1px solid var(--border);border-radius:9px;color:var(--t2);padding:5px 11px;font-size:.72rem;cursor:pointer;font-family:inherit;transition:color .2s,border-color .2s}
+.clear-btn:hover{color:#ef4444;border-color:#ef4444}
+
+#messages{flex:1;overflow-y:auto;padding:14px 15px 8px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth;background:#fff}
+
+.msg-row{display:flex;align-items:flex-end;gap:8px;max-width:85%;animation:mIn .2s ease both}
+@keyframes mIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.msg-row.user{align-self:flex-end;flex-direction:row-reverse}
+.msg-row.agent{align-self:flex-start}
+.msg-av{width:30px;height:30px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:.82rem;flex-shrink:0;box-shadow:0 2px 8px rgba(79,110,247,.3)}
+.msg-body{display:flex;flex-direction:column;gap:3px}
+.bubble{padding:11px 14px;border-radius:17px;line-height:1.55;font-size:.87rem;white-space:pre-wrap;word-break:break-word}
+.msg-row.user .bubble{background:var(--grad);color:#fff;border-bottom-right-radius:4px;font-weight:500;box-shadow:var(--sh2)}
+.msg-row.agent .bubble{background:#f0f0f0;color:var(--text);border-bottom-left-radius:4px}
+.msg-time{font-size:.62rem;color:var(--t3);padding:0 2px}
+.msg-row.user .msg-time{text-align:right}
+.tool-pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:600}
+.tool-pill{background:rgba(79,110,247,.1);color:var(--a1);border:1px solid rgba(79,110,247,.22)}
+.gemini-pill{background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.25)}
+
+#typing{display:none;align-items:flex-end;gap:8px;align-self:flex-start;animation:mIn .2s ease both}
+#typing.visible{display:flex}
+.typing-bub{background:#f0f0f0;border-radius:17px;border-bottom-left-radius:4px;padding:12px 15px;display:flex;gap:5px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:#bbb;animation:bounce 1.2s ease-in-out infinite}
+.dot:nth-child(2){animation-delay:.18s}
+.dot:nth-child(3){animation-delay:.36s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-6px);opacity:1}}
+
+#inputbar{flex-shrink:0;padding:9px 13px 12px;background:var(--white);border-top:1px solid var(--border);display:flex;gap:9px;align-items:flex-end}
+.input-wrap{flex:1;display:flex;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:8px 11px;gap:7px;transition:border-color .2s}
+.input-wrap:focus-within{border-color:var(--a1)}
+#chat-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:.88rem;font-family:inherit;resize:none;min-height:22px;max-height:110px;line-height:1.4}
+#chat-input::placeholder{color:var(--t3)}
+.mic-ico{font-size:.92rem;color:var(--t2);cursor:pointer;flex-shrink:0;align-self:flex-end;padding-bottom:2px}
+#send-btn{width:42px;height:42px;border-radius:13px;background:var(--grad);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;color:#fff;box-shadow:var(--sh2);transition:opacity .2s,transform .1s;flex-shrink:0}
+#send-btn:hover{opacity:.88}
+#send-btn:active{transform:scale(.93)}
+#send-btn:disabled{background:var(--border);color:var(--t3);box-shadow:none;cursor:not-allowed}
+
+/* ══ FILES ══ */
+#panel-files{padding:16px;background:var(--bg)}
+.files-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+#wd-label{font-size:.7rem;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ref-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--t2);padding:4px 10px;font-size:.72rem;cursor:pointer;font-family:inherit;background:var(--white);transition:color .2s,border-color .2s}
+.ref-btn:hover{color:var(--a1);border-color:var(--a1)}
+#wd-path{font-size:.78rem;color:var(--a1);font-weight:600;margin-bottom:15px;word-break:break-all}
+#file-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.file-card{background:var(--white);border-radius:var(--r);padding:16px 12px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;box-shadow:var(--sh);transition:box-shadow .15s,transform .15s;text-align:center}
+.file-card:hover{box-shadow:0 4px 18px rgba(79,110,247,.15);transform:translateY(-2px)}
+.file-card:active{transform:scale(.96)}
+.fc-dir{background:rgba(79,110,247,.06)}
+.fc-ico{font-size:1.9rem}
+.fc-name{font-size:.76rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+.fc-size{font-size:.66rem;color:var(--t2)}
+.files-empty{text-align:center;color:var(--t2);font-size:.82rem;padding:36px 0;grid-column:1/-1}
+
+/* ══ SETTINGS ══ */
+#panel-settings{padding:4px 16px 20px;background:var(--bg)}
+.s-card{background:var(--white);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--sh)}
+.s-row{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--border)}
+.s-row:last-child{border-bottom:none}
+.s-row-ico{font-size:1rem;flex-shrink:0}
+.s-row-body{flex:1;min-width:0}
+.s-row-lbl{font-size:.67rem;color:var(--t2);margin-bottom:2px}
+.s-row-val{font-size:.8rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.danger-btn{width:100%;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:var(--r);color:#ef4444;padding:13px;font-size:.86rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;margin-bottom:10px;display:block}
+.danger-btn:hover{background:rgba(239,68,68,.15)}
+
+/* ── Chips ── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{background:#fff;border:1.5px solid rgba(79,110,247,.3);border-radius:20px;padding:5px 13px;font-size:.73rem;font-weight:600;color:var(--a1);cursor:pointer;font-family:inherit;transition:background .15s,border-color .2s}
+.chip:hover{background:rgba(79,110,247,.08)}
+
+/* ── Toast ── */
+#toast{position:fixed;top:calc(var(--hh) + 10px);left:50%;transform:translateX(-50%) translateY(-4px);background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:20px;padding:8px 18px;font-size:.8rem;font-weight:600;z-index:200;opacity:0;pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.1);transition:opacity .3s,transform .3s}
+#toast.visible{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+
+/* ══ SETTINGS (updated) ══ */
+.s-section-title{font-size:.75rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:16px 0 8px}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-top:4px}
+.toggle-lbl{font-size:.82rem;font-weight:600;color:var(--text)}
+.toggle-lbl.off{color:var(--t3)}
+.tgl-btn{width:44px;height:24px;border-radius:12px;background:var(--border);border:none;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0;padding:0}
+.tgl-btn::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .25s}
+.tgl-btn[aria-checked="true"]{background:var(--a1)}
+.tgl-btn[aria-checked="true"]::after{transform:translateX(20px)}
+.action-btn{width:100%;background:rgba(79,110,247,.07);border:1px solid rgba(79,110,247,.2);border-radius:var(--r);color:var(--a1);padding:13px;font-size:.86rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s;margin-bottom:10px;display:block}
+.action-btn:hover{background:rgba(79,110,247,.14)}
+
+/* ── Log modal ── */
+#log-modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none;align-items:flex-end;backdrop-filter:blur(2px)}
+#log-modal.visible{display:flex}
+#log-panel{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-height:72dvh;display:flex;flex-direction:column;box-shadow:0 -4px 24px rgba(0,0,0,.12)}
+#log-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);font-size:.92rem;font-weight:700;flex-shrink:0;color:var(--text)}
+#log-close{background:var(--bg);border:none;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--t2);width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+#log-body{flex:1;overflow-y:auto;padding:12px 16px}
+.log-entry{background:var(--bg);border-radius:11px;padding:10px 12px;margin-bottom:8px}
+.log-op{font-size:.8rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px}
+.log-ok{color:#10b981}
+.log-err{color:#ef4444}
+.log-meta{font-size:.7rem;color:var(--t2);margin-top:3px}
+.log-empty{text-align:center;color:var(--t2);font-size:.83rem;padding:28px 0}
+
+/* ══ BOTTOM NAV ══ */
+#nav{position:fixed;bottom:0;left:0;right:0;height:var(--nh);background:var(--white);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 6px;z-index:50;box-shadow:0 -2px 12px rgba(0,0,0,.06)}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:7px 4px;border-radius:12px;transition:background .15s;position:relative;font-family:inherit}
+.nav-btn:hover{background:rgba(79,110,247,.07)}
+.nav-ico{font-size:1.2rem;line-height:1}
+.nav-lbl{font-size:.62rem;font-weight:600;color:var(--t2)}
+.nav-btn.active .nav-lbl{color:var(--a1)}
+.nav-btn.active::after{content:'';position:absolute;top:0;left:24%;right:24%;height:2.5px;border-radius:0 0 3px 3px;background:var(--grad)}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="logo-icon">🤖</div>
+  <div class="logo-text">
+    <div class="logo-title">AI Agent</div>
+    <div class="logo-sub">Powered by Groq</div>
+  </div>
+  <div class="hdr-right">
+    <div class="notif">🔔<div class="notif-dot"></div></div>
+    <div class="avatar">A</div>
+  </div>
+</header>
+
+<div id="panels">
+
+  <!-- HOME -->
+  <div class="panel active" id="panel-home">
+    <div class="hero">
+      <div class="hero-inner">
+        <div class="hero-body">
+          <div class="hero-label">AI File Agent</div>
+          <div class="hero-title">Chat Smarter<br>with AI Agent</div>
+          <div class="hero-sub">Read, write, search &amp; analyse files with natural language</div>
+        </div>
+        <div class="hero-emoji">🤖</div>
+      </div>
+      <div class="hero-btns">
+        <button class="btn-primary" id="hero-cta">Start Chat</button>
+        <button class="btn-outline" id="hero-explore">Explore Tools</button>
+      </div>
+    </div>
+
+    <div class="sec-row"><div class="sec-title">Today's Activity</div></div>
+    <div class="stats">
+      <div class="stat"><div class="stat-ico">💬</div><div class="stat-val" id="stat-chats">0</div><div class="stat-lbl">Chats Today</div></div>
+      <div class="stat"><div class="stat-ico">📁</div><div class="stat-val" id="stat-files">0</div><div class="stat-lbl">Files</div></div>
+      <div class="stat"><div class="stat-ico">🔧</div><div class="stat-val" id="stat-tools">0</div><div class="stat-lbl">Tools Used</div></div>
+    </div>
+
+    <div class="sec-row"><div class="sec-title">Quick Actions</div></div>
+    <div class="qa-grid">
+      <button class="qa-btn" data-prompt="List the files in my working directory">
+        <div class="qa-ico-wrap qa-ico-blue">📁</div>
+        <div class="qa-text"><div class="qa-name">Read File</div><div class="qa-desc">Open &amp; view files</div></div>
+      </button>
+      <button class="qa-btn" data-prompt="Help me write a new file">
+        <div class="qa-ico-wrap qa-ico-purple">✍️</div>
+        <div class="qa-text"><div class="qa-name">Write File</div><div class="qa-desc">Create &amp; edit files</div></div>
+      </button>
+      <button class="qa-btn" data-prompt="Search the web for ">
+        <div class="qa-ico-wrap qa-ico-green">🔍</div>
+        <div class="qa-text"><div class="qa-name">Search Web</div><div class="qa-desc">DuckDuckGo search</div></div>
+      </button>
+      <button class="qa-btn" data-prompt="Execute this Python code:&#10;```python&#10;&#10;```">
+        <div class="qa-ico-wrap qa-ico-orange">▶️</div>
+        <div class="qa-text"><div class="qa-name">Run Code</div><div class="qa-desc">Execute Python</div></div>
+      </button>
+    </div>
+
+    <div class="sec-row">
+      <div class="sec-title">Recent Activity</div>
+      <div class="sec-link" id="view-all">View all →</div>
+    </div>
+    <div id="recent-list"><div class="act-empty">No recent activity yet. Start a chat to begin.</div></div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="panel" id="panel-chat">
+    <div class="chat-strip">
+      <div class="ca-info">
+        <div class="ca-av">🤖</div>
+        <div><div class="ca-name">File Agent</div><div class="ca-status">● Online</div></div>
+      </div>
+      <button class="clear-btn" id="clear-btn">Clear chat</button>
+    </div>
+    <div id="messages">
+      <div class="msg-row agent">
+        <div class="msg-av">🤖</div>
+        <div class="msg-body">
+          <div class="bubble">Hello! I'm your File Agent powered by Groq. I can read, write, search, analyse and summarise files. What would you like to do?</div>
+          <div class="chips">
+            <button class="chip" data-prompt="List the files in my working directory">Read a file</button>
+            <button class="chip" data-prompt="Search the web for ">Search web</button>
+            <button class="chip" data-prompt="Execute this Python code:&#10;```python&#10;&#10;```">Run code</button>
+          </div>
+          <div class="msg-time">now</div>
+        </div>
+      </div>
+      <div id="typing">
+        <div class="msg-av">🤖</div>
+        <div class="typing-bub"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      </div>
+    </div>
+    <div id="inputbar">
+      <div class="input-wrap">
+        <textarea id="chat-input" rows="1" placeholder="Ask me anything about your files…"></textarea>
+        <span class="mic-ico">🎤</span>
+      </div>
+      <button id="send-btn">➤</button>
+    </div>
+  </div>
+
+  <!-- FILES -->
+  <div class="panel" id="panel-files">
+    <div class="files-top">
+      <span id="wd-label">Working Directory</span>
+      <button class="ref-btn" id="refresh-btn">↺ Refresh</button>
+    </div>
+    <div id="wd-path">—</div>
+    <div id="file-grid"><div class="files-empty">Loading files…</div></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="panel" id="panel-settings">
+    <div class="s-section-title">🧠 Model</div>
+    <div class="s-card">
+      <div class="s-row">
+        <div class="s-row-ico">🤖</div>
+        <div class="s-row-body"><div class="s-row-lbl">Active Model</div><div class="s-row-val" id="s-model">llama-3.1-8b-instant</div></div>
+      </div>
+      <div class="s-row">
+        <div class="s-row-ico">⚡</div>
+        <div class="s-row-body">
+          <div class="s-row-lbl">Provider</div>
+          <div class="toggle-row">
+            <span class="toggle-lbl" id="tgl-groq">Groq</span>
+            <button class="tgl-btn" id="model-toggle" role="switch" aria-checked="false"></button>
+            <span class="toggle-lbl off" id="tgl-gemini">Gemini</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s-section-title">🤖 Agent</div>
+    <div class="s-card">
+      <div class="s-row"><div class="s-row-ico">📂</div><div class="s-row-body"><div class="s-row-lbl">Working Directory</div><div class="s-row-val" id="s-workdir">—</div></div></div>
+      <div class="s-row"><div class="s-row-ico">🔑</div><div class="s-row-body"><div class="s-row-lbl">Session ID</div><div class="s-row-val" id="s-session">—</div></div></div>
+    </div>
+    <button class="action-btn" id="s-log-btn">📋 View Operation Log</button>
+    <button class="danger-btn" id="s-clear-btn">🗑️ Clear Chat History</button>
+
+    <div class="s-section-title">ℹ️ About</div>
+    <div class="s-card">
+      <div class="s-row"><div class="s-row-ico">⏱️</div><div class="s-row-body"><div class="s-row-lbl">Uptime</div><div class="s-row-val" id="s-uptime">—</div></div></div>
+      <div class="s-row"><div class="s-row-ico">🔧</div><div class="s-row-body"><div class="s-row-lbl">Tools Available</div><div class="s-row-val">15 tools</div></div></div>
+      <div class="s-row"><div class="s-row-ico">📦</div><div class="s-row-body"><div class="s-row-lbl">Version</div><div class="s-row-val">1.0.0</div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<div id="log-modal">
+  <div id="log-panel">
+    <div id="log-hdr">
+      <span>📋 Operation Log</span>
+      <button id="log-close">✕</button>
+    </div>
+    <div id="log-body"><div class="log-empty">No operations yet.</div></div>
+  </div>
+</div>
+
+<nav id="nav">
+  <button class="nav-btn active" data-tab="home"><span class="nav-ico">🏠</span><span class="nav-lbl">Home</span></button>
+  <button class="nav-btn" data-tab="chat"><span class="nav-ico">💬</span><span class="nav-lbl">Chat</span></button>
+  <button class="nav-btn" data-tab="files"><span class="nav-ico">📁</span><span class="nav-lbl">Files</span></button>
+  <button class="nav-btn" data-tab="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Settings</span></button>
+</nav>
+
+<script>
+const SESSION_ID = 'session_' + Math.random().toString(36).slice(2, 10);
+const messagesEl = document.getElementById('messages');
+const chatInput  = document.getElementById('chat-input');
+const sendBtn    = document.getElementById('send-btn');
+const typingEl   = document.getElementById('typing');
+let toolsTotal   = 0;
+const recentMsgs = [];
+
+// ── Toast ─────────────────────────────────────────────────
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function showToast(msg, durationMs = 3000) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('visible'), durationMs);
+}
+
+// ── Tab switching ─────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add('active');
+  if (tab === 'files')    loadFiles();
+  if (tab === 'home')     refreshHome();
+  if (tab === 'settings') loadSettings();
+  if (tab === 'chat')     chatInput.focus();
+}
+
+document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+document.getElementById('hero-cta').addEventListener('click',     () => switchTab('chat'));
+document.getElementById('hero-explore').addEventListener('click', () => switchTab('files'));
+document.getElementById('view-all').addEventListener('click',     () => switchTab('chat'));
+document.getElementById('clear-btn').addEventListener('click',    clearSession);
+document.getElementById('s-clear-btn').addEventListener('click',  clearSession);
+document.getElementById('refresh-btn').addEventListener('click',  loadFiles);
+document.getElementById('s-session').textContent = SESSION_ID;
+
+// ── Chips (static + dynamic) ──────────────────────────────
+function wireChips(container) {
+  container.querySelectorAll('.chip[data-prompt]').forEach(c => {
+    c.addEventListener('click', () => {
+      chatInput.value = c.dataset.prompt;
+      autoGrow(); switchTab('chat'); chatInput.focus();
+    });
+  });
+}
+wireChips(document); // wire welcome message chips
+
+// ── Quick actions ─────────────────────────────────────────
+document.querySelectorAll('.qa-btn[data-prompt]').forEach(b => {
+  b.addEventListener('click', () => {
+    chatInput.value = b.dataset.prompt;
+    autoGrow();
+    switchTab('chat');
+    chatInput.focus();
+  });
+});
+
+// ── Textarea ──────────────────────────────────────────────
+function autoGrow() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 110) + 'px';
+}
+chatInput.addEventListener('input', autoGrow);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+sendBtn.addEventListener('click', sendMessage);
+
+// ── Helpers ───────────────────────────────────────────────
+const fmtTime = (d = new Date()) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return { py:'🐍', js:'📜', ts:'📜', json:'📋', md:'📝', txt:'📄',
+           csv:'📊', yaml:'⚙️', yml:'⚙️', html:'🌐', css:'🎨', sh:'⚡', pdf:'📕' }[ext] || '📄';
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+// ── Append message ────────────────────────────────────────
+function appendMessage(role, content, { tools = [], gemini = false } = {}) {
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (role === 'user' ? 'user' : 'agent');
+
+  if (role === 'agent') {
+    const av = document.createElement('div');
+    av.className = 'msg-av'; av.textContent = '🤖';
+    row.appendChild(av);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  const bub = document.createElement('div');
+  bub.className = 'bubble'; bub.textContent = content;
+  body.appendChild(bub);
+
+  if (role === 'agent' && (tools.length || gemini)) {
+    const pills = document.createElement('div');
+    pills.className = 'tool-pills';
+    if (gemini) {
+      const p = document.createElement('span');
+      p.className = 'pill gemini-pill'; p.textContent = '✦ Gemini fallback';
+      pills.appendChild(p);
+    }
+    tools.forEach(t => {
+      const p = document.createElement('span');
+      p.className = 'pill tool-pill'; p.textContent = '🔧 ' + t;
+      pills.appendChild(p);
+    });
+    body.appendChild(pills);
+  }
+
+  if (role === 'agent') {
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    [['Read a file','List the files in my working directory'],
+     ['Search web','Search the web for '],
+     ['Run code','Execute this Python code:\n```python\n\n```']
+    ].forEach(([label, prompt]) => {
+      const c = document.createElement('button');
+      c.className = 'chip'; c.textContent = label;
+      c.dataset.prompt = prompt;
+      chips.appendChild(c);
+    });
+    body.appendChild(chips);
+    wireChips(chips);
+  }
+
+  const ts = document.createElement('div');
+  ts.className = 'msg-time'; ts.textContent = fmtTime();
+  body.appendChild(ts);
+
+  row.appendChild(body);
+  messagesEl.insertBefore(row, typingEl);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  recentMsgs.unshift({ role, text: content.slice(0, 80), time: fmtTime() });
+  if (recentMsgs.length > 3) recentMsgs.pop();
+}
+
+// ── Send message ──────────────────────────────────────────
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = ''; chatInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  appendMessage('user', text);
+  typingEl.classList.add('visible');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    const res  = await fetch('/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+    });
+    const data = await res.json();
+    typingEl.classList.remove('visible');
+
+    const errStr = (data.error || '').toLowerCase();
+    if (errStr.includes('413') || errStr.includes('rate_limit') || errStr.includes('request_too_large')) {
+      showToast('⚡ Switching to Gemini 2.5 Flash…', 4000);
+      // retry once — backend will auto-fall back to Gemini on next call
+      const res2 = await fetch('/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+      });
+      const data2 = await res2.json();
+      if (data2.error) {
+        appendMessage('agent', '⚠️ Error: ' + data2.error);
+      } else {
+        toolsTotal += (data2.tools_used || []).length;
+        appendMessage('agent', data2.response, { tools: data2.tools_used || [], gemini: true });
+        updateStats();
+      }
+    } else if (data.error) {
+      appendMessage('agent', '⚠️ Error: ' + data.error);
+    } else {
+      if (data.gemini_used) showToast('⚡ Gemini 2.5 Flash used (Groq rate limited)', 3000);
+      toolsTotal += (data.tools_used || []).length;
+      appendMessage('agent', data.response, { tools: data.tools_used || [], gemini: data.gemini_used || false });
+      updateStats();
+    }
+  } catch (err) {
+    typingEl.classList.remove('visible');
+    appendMessage('agent', '⚠️ Network error: ' + err.message);
+  } finally {
+    sendBtn.disabled = false; chatInput.focus(); loadFiles();
+  }
+}
+
+// ── Clear session ─────────────────────────────────────────
+async function clearSession() {
+  await fetch('/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: SESSION_ID }),
+  }).catch(() => {});
+  messagesEl.querySelectorAll('.msg-row').forEach((r, i) => { if (i > 0) r.remove(); });
+  toolsTotal = 0; recentMsgs.length = 0;
+  updateStats(); renderRecent();
+}
+
+// ── Stats & recent ────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-chats').textContent = messagesEl.querySelectorAll('.msg-row.user').length;
+  document.getElementById('stat-tools').textContent = toolsTotal;
+}
+
+function renderRecent() {
+  const el = document.getElementById('recent-list');
+  if (!recentMsgs.length) {
+    el.innerHTML = '<div class="act-empty">No recent activity yet. Start a chat to begin.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  recentMsgs.forEach(m => {
+    const d = document.createElement('div');
+    d.className = 'act-item';
+    d.innerHTML = `<div class="act-av">${m.role === 'user' ? '👤' : '🤖'}</div>
+      <div class="act-body">
+        <div class="act-role">${m.role === 'user' ? 'You' : 'Agent'}</div>
+        <div class="act-txt">${m.text}</div>
+        <div class="act-time">${m.time}</div>
+      </div>`;
+    d.addEventListener('click', () => switchTab('chat'));
+    el.appendChild(d);
+  });
+}
+
+function refreshHome() { updateStats(); renderRecent(); }
+
+// ── Settings ──────────────────────────────────────────────
+let geminiMode = false;
+
+async function loadSettings() {
+  try {
+    const res  = await fetch('/settings');
+    const data = await res.json();
+    if (data.model) document.getElementById('s-model').textContent = data.model;
+    if (data.directory) {
+      document.getElementById('s-workdir').textContent = data.directory;
+    }
+    if (data.uptime) document.getElementById('s-uptime').textContent = data.uptime;
+  } catch (_) {}
+}
+
+const modelToggle = document.getElementById('model-toggle');
+modelToggle.addEventListener('click', async () => {
+  geminiMode = !geminiMode;
+  modelToggle.setAttribute('aria-checked', String(geminiMode));
+  document.getElementById('tgl-groq').classList.toggle('off', geminiMode);
+  document.getElementById('tgl-gemini').classList.toggle('off', !geminiMode);
+  const model = geminiMode ? 'gemini-2.5-flash' : 'llama-3.1-8b-instant';
+  document.getElementById('s-model').textContent = model;
+  showToast(geminiMode ? '✦ Switched to Gemini 2.5 Flash' : '⚡ Switched to Groq llama-3.1-8b-instant', 2500);
+  await fetch('/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+  }).catch(() => {});
+});
+
+// ── Operation log modal ───────────────────────────────────
+document.getElementById('s-log-btn').addEventListener('click', loadLog);
+document.getElementById('log-close').addEventListener('click', () => {
+  document.getElementById('log-modal').classList.remove('visible');
+});
+document.getElementById('log-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('log-modal'))
+    document.getElementById('log-modal').classList.remove('visible');
+});
+
+async function loadLog() {
+  try {
+    const res  = await fetch('/log?session_id=' + SESSION_ID);
+    const data = await res.json();
+    const body = document.getElementById('log-body');
+    const entries = data.log || [];
+    if (!entries.length) { body.innerHTML = '<div class="log-empty">No operations yet.</div>'; }
+    else {
+      body.innerHTML = '';
+      entries.slice().reverse().forEach(e => {
+        const d = document.createElement('div'); d.className = 'log-entry';
+        const ok = e.success;
+        d.innerHTML = `<div class="log-op"><span class="${ok ? 'log-ok' : 'log-err'}">${ok ? '✓' : '✗'}</span>${e.operation}</div>
+          <div class="log-meta">${e.timestamp} · ${JSON.stringify(e.args).slice(0,60)}</div>`;
+        body.appendChild(d);
+      });
+    }
+    document.getElementById('log-modal').classList.add('visible');
+  } catch (_) {
+    showToast('⚠️ Could not load log', 2000);
+  }
+}
+
+// ── Load files ────────────────────────────────────────────
+async function loadFiles() {
+  try {
+    const res  = await fetch('/files?session_id=' + SESSION_ID);
+    const data = await res.json();
+    if (data.error) return;
+    const wd = data.working_directory || '—';
+    document.getElementById('wd-path').textContent   = wd;
+    document.getElementById('s-workdir').textContent = wd;
+    document.getElementById('stat-files').textContent = (data.files || []).length;
+    const grid = document.getElementById('file-grid');
+    grid.innerHTML = '';
+    if (!data.files?.length) { grid.innerHTML = '<div class="files-empty">📁 No files found</div>'; return; }
+    data.files.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'file-card' + (f.is_dir ? ' fc-dir' : '');
+      const ico = document.createElement('div'); ico.className = 'fc-ico';
+      ico.textContent = f.is_dir ? '📂' : fileIcon(f.name);
+      const name = document.createElement('div'); name.className = 'fc-name';
+      name.textContent = f.name; name.title = f.name;
+      card.appendChild(ico); card.appendChild(name);
+      if (!f.is_dir && f.size !== null) {
+        const sz = document.createElement('div'); sz.className = 'fc-size';
+        sz.textContent = fmtBytes(f.size); card.appendChild(sz);
+      }
+      if (!f.is_dir) {
+        card.addEventListener('click', () => {
+          chatInput.value = 'Summarize the file: ' + f.name;
+          autoGrow(); switchTab('chat');
+        });
+      }
+      grid.appendChild(card);
+    });
+  } catch (_) {}
+}
+
+// ── Init ──────────────────────────────────────────────────
+loadFiles();
+loadSettings();
+</script>
+</body>
+</html>
