@@ -692,7 +692,7 @@ async function loadFiles() {
     document.getElementById('stat-files').textContent = (data.files || []).length;
     const grid = document.getElementById('file-grid');
     grid.innerHTML = '';
-    if (!data.files?.length) { grid.innerHTML = '<div class="files-empty">Empty directory</div>'; return; }
+    if (!data.files?.length) { grid.innerHTML = '<div class="files-empty">📁 No files found</div>'; return; }
     data.files.forEach(f => {
       const card = document.createElement('div');
       card.className = 'file-card' + (f.is_dir ? ' fc-dir' : '');
