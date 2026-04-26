@@ -1,5 +1,7 @@
 PRIMARY_MODEL = "llama-3.3-70b-versatile"
 # FALLBACK_MODEL = "llama-3.3-70b-versatile"
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 MAX_TOKENS = 8192
 TEMPERATURE = 0.2
 MAX_FILE_SIZE_MB = 5
