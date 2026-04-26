@@ -367,7 +367,7 @@ def _ddg_real_url(href: str) -> str:
     return urllib.parse.unquote(uddg[0]) if uddg else href
 
 
-def search_web(query: str) -> ToolResult:
+def search_web(query: str, **kwargs) -> ToolResult:
     url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote_plus(query)}"
     req = urllib.request.Request(
         url, headers={"User-Agent": "Mozilla/5.0 groq-file-agent/1.0"}
