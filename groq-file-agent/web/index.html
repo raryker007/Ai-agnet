@@ -316,5 +316,227 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   <button class="nav-btn" data-tab="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Settings</span></button>
 </nav>
 
+<script>
+const SESSION_ID = 'session_' + Math.random().toString(36).slice(2, 10);
+const messagesEl = document.getElementById('messages');
+const chatInput  = document.getElementById('chat-input');
+const sendBtn    = document.getElementById('send-btn');
+const typingEl   = document.getElementById('typing');
+let toolsTotal   = 0;
+const recentMsgs = [];
+
+// ── Tab switching ─────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add('active');
+  if (tab === 'files')    loadFiles();
+  if (tab === 'home')     refreshHome();
+  if (tab === 'chat')     chatInput.focus();
+}
+
+document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+document.getElementById('hero-cta').addEventListener('click',     () => switchTab('chat'));
+document.getElementById('hero-explore').addEventListener('click', () => switchTab('files'));
+document.getElementById('view-all').addEventListener('click',     () => switchTab('chat'));
+document.getElementById('clear-btn').addEventListener('click',    clearSession);
+document.getElementById('s-clear-btn').addEventListener('click',  clearSession);
+document.getElementById('refresh-btn').addEventListener('click',  loadFiles);
+document.getElementById('s-session').textContent = SESSION_ID;
+
+// ── Quick actions ─────────────────────────────────────────
+document.querySelectorAll('.qa-btn[data-prompt]').forEach(b => {
+  b.addEventListener('click', () => {
+    chatInput.value = b.dataset.prompt;
+    autoGrow();
+    switchTab('chat');
+    chatInput.focus();
+  });
+});
+
+// ── Textarea ──────────────────────────────────────────────
+function autoGrow() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 110) + 'px';
+}
+chatInput.addEventListener('input', autoGrow);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+sendBtn.addEventListener('click', sendMessage);
+
+// ── Helpers ───────────────────────────────────────────────
+const fmtTime = (d = new Date()) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return { py:'🐍', js:'📜', ts:'📜', json:'📋', md:'📝', txt:'📄',
+           csv:'📊', yaml:'⚙️', yml:'⚙️', html:'🌐', css:'🎨', sh:'⚡', pdf:'📕' }[ext] || '📄';
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+// ── Append message ────────────────────────────────────────
+function appendMessage(role, content, { tools = [], gemini = false } = {}) {
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (role === 'user' ? 'user' : 'agent');
+
+  if (role === 'agent') {
+    const av = document.createElement('div');
+    av.className = 'msg-av'; av.textContent = '🤖';
+    row.appendChild(av);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  const bub = document.createElement('div');
+  bub.className = 'bubble'; bub.textContent = content;
+  body.appendChild(bub);
+
+  if (role === 'agent' && (tools.length || gemini)) {
+    const pills = document.createElement('div');
+    pills.className = 'tool-pills';
+    if (gemini) {
+      const p = document.createElement('span');
+      p.className = 'pill gemini-pill'; p.textContent = '✦ Gemini fallback';
+      pills.appendChild(p);
+    }
+    tools.forEach(t => {
+      const p = document.createElement('span');
+      p.className = 'pill tool-pill'; p.textContent = '🔧 ' + t;
+      pills.appendChild(p);
+    });
+    body.appendChild(pills);
+  }
+
+  const ts = document.createElement('div');
+  ts.className = 'msg-time'; ts.textContent = fmtTime();
+  body.appendChild(ts);
+
+  row.appendChild(body);
+  messagesEl.insertBefore(row, typingEl);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  recentMsgs.unshift({ role, text: content.slice(0, 80), time: fmtTime() });
+  if (recentMsgs.length > 3) recentMsgs.pop();
+}
+
+// ── Send message ──────────────────────────────────────────
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = ''; chatInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  appendMessage('user', text);
+  typingEl.classList.add('visible');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    const res  = await fetch('/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+    });
+    const data = await res.json();
+    typingEl.classList.remove('visible');
+    if (data.error) {
+      appendMessage('agent', '⚠️ Error: ' + data.error);
+    } else {
+      toolsTotal += (data.tools_used || []).length;
+      appendMessage('agent', data.response, { tools: data.tools_used || [], gemini: data.gemini_used || false });
+      updateStats();
+    }
+  } catch (err) {
+    typingEl.classList.remove('visible');
+    appendMessage('agent', '⚠️ Network error: ' + err.message);
+  } finally {
+    sendBtn.disabled = false; chatInput.focus(); loadFiles();
+  }
+}
+
+// ── Clear session ─────────────────────────────────────────
+async function clearSession() {
+  await fetch('/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: SESSION_ID }),
+  }).catch(() => {});
+  messagesEl.querySelectorAll('.msg-row').forEach((r, i) => { if (i > 0) r.remove(); });
+  toolsTotal = 0; recentMsgs.length = 0;
+  updateStats(); renderRecent();
+}
+
+// ── Stats & recent ────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-chats').textContent = messagesEl.querySelectorAll('.msg-row.user').length;
+  document.getElementById('stat-tools').textContent = toolsTotal;
+}
+
+function renderRecent() {
+  const el = document.getElementById('recent-list');
+  if (!recentMsgs.length) {
+    el.innerHTML = '<div class="act-empty">No recent activity yet. Start a chat to begin.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  recentMsgs.forEach(m => {
+    const d = document.createElement('div');
+    d.className = 'act-item';
+    d.innerHTML = `<div class="act-av">${m.role === 'user' ? '👤' : '🤖'}</div>
+      <div class="act-body">
+        <div class="act-role">${m.role === 'user' ? 'You' : 'Agent'}</div>
+        <div class="act-txt">${m.text}</div>
+        <div class="act-time">${m.time}</div>
+      </div>`;
+    d.addEventListener('click', () => switchTab('chat'));
+    el.appendChild(d);
+  });
+}
+
+function refreshHome() { updateStats(); renderRecent(); }
+
+// ── Load files ────────────────────────────────────────────
+async function loadFiles() {
+  try {
+    const res  = await fetch('/files?session_id=' + SESSION_ID);
+    const data = await res.json();
+    if (data.error) return;
+    const wd = data.working_directory || '—';
+    document.getElementById('wd-path').textContent   = wd;
+    document.getElementById('s-workdir').textContent = wd;
+    document.getElementById('stat-files').textContent = (data.files || []).length;
+    const grid = document.getElementById('file-grid');
+    grid.innerHTML = '';
+    if (!data.files?.length) { grid.innerHTML = '<div class="files-empty">Empty directory</div>'; return; }
+    data.files.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'file-card' + (f.is_dir ? ' fc-dir' : '');
+      const ico = document.createElement('div'); ico.className = 'fc-ico';
+      ico.textContent = f.is_dir ? '📂' : fileIcon(f.name);
+      const name = document.createElement('div'); name.className = 'fc-name';
+      name.textContent = f.name; name.title = f.name;
+      card.appendChild(ico); card.appendChild(name);
+      if (!f.is_dir && f.size !== null) {
+        const sz = document.createElement('div'); sz.className = 'fc-size';
+        sz.textContent = fmtBytes(f.size); card.appendChild(sz);
+      }
+      if (!f.is_dir) {
+        card.addEventListener('click', () => {
+          chatInput.value = 'Summarize the file: ' + f.name;
+          autoGrow(); switchTab('chat');
+        });
+      }
+      grid.appendChild(card);
+    });
+  } catch (_) {}
+}
+
+// ── Init ──────────────────────────────────────────────────
+loadFiles();
+</script>
 </body>
 </html>
