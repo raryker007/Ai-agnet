@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Groq File Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --card: #0f3460;
+      --accent: #00d4ff;
+      --accent-dim: #0099bb;
+      --text: #e0e0e0;
+      --text-dim: #888;
+      --user-bg: #00d4ff;
+      --user-text: #0a0a1a;
+      --agent-bg: #1e2a45;
+      --border: #2a3555;
+      --danger: #ff4d6d;
+      --gemini: #f4b942;
+      --tool: #7c6bdb;
+      --sidebar-w: 260px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s ease;
+    }
+
+    #sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #sidebar-header h2 {
+      font-size: 0.85rem;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      flex: 1;
+    }
+
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    #working-dir {
+      padding: 8px 16px;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      word-break: break-all;
+    }
+
+    #file-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      font-size: 0.82rem;
+      color: var(--text);
+      cursor: default;
+      transition: background 0.15s;
+    }
+    .file-item:hover { background: rgba(0, 212, 255, 0.06); }
+    .file-item .icon { font-size: 0.9rem; opacity: 0.75; }
+    .file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item .size { font-size: 0.7rem; color: var(--text-dim); }
+
+    /* ── Main area ───────────────────────────────────────── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    #topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #menu-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 1.3rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    #topbar h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      flex: 1;
+    }
+
+    #clear-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #clear-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* ── Messages ────────────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 75%;
+    }
+    .msg-row.user { align-self: flex-end; align-items: flex-end; }
+    .msg-row.agent { align-self: flex-start; align-items: flex-start; }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      line-height: 1.5;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg-row.user .bubble {
+      background: var(--user-bg);
+      color: var(--user-text);
+      border-bottom-right-radius: 4px;
+      font-weight: 500;
+    }
+    .msg-row.agent .bubble {
+      background: var(--agent-bg);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .msg-meta {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .badge.tool { background: rgba(124, 107, 219, 0.2); color: var(--tool); border: 1px solid rgba(124,107,219,0.4); }
+    .badge.gemini { background: rgba(244, 185, 66, 0.15); color: var(--gemini); border: 1px solid rgba(244,185,66,0.35); }
+
+    /* ── Typing indicator ────────────────────────────────── */
+    #typing {
+      display: none;
+      align-self: flex-start;
+      background: var(--agent-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      border-bottom-left-radius: 4px;
+      padding: 12px 16px;
+    }
+    #typing.visible { display: flex; gap: 5px; align-items: center; }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: bounce 1.2s infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    /* ── Input bar ───────────────────────────────────────── */
+    #inputbar {
+      border-top: 1px solid var(--border);
+      padding: 14px 20px;
+      background: var(--surface);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.92rem;
+      padding: 10px 14px;
+      resize: none;
+      min-height: 44px;
+      max-height: 160px;
+      line-height: 1.4;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    #input:focus { border-color: var(--accent); }
+    #input::placeholder { color: var(--text-dim); }
+
+    #send-btn {
+      background: var(--accent);
+      color: #0a0a1a;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      height: 44px;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    #send-btn:hover { background: var(--accent-dim); }
+    #send-btn:active { transform: scale(0.97); }
+    #send-btn:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; transform: none; }
+
+    /* ── Scrollbar ───────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 640px) {
+      #sidebar {
+        position: fixed;
+        top: 0; left: 0; bottom: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+      }
+      #sidebar.open { transform: translateX(0); }
+      #menu-btn { display: block; }
+      .msg-row { max-width: 90%; }
+      #overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 99;
+      }
+      #overlay.visible { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h2>📁 Files</h2>
+    <button id="refresh-btn" onclick="loadFiles()">↺ Refresh</button>
+  </div>
+  <div id="working-dir">—</div>
+  <div id="file-list"><div class="file-item"><span class="icon">⏳</span><span class="name">Loading…</span></div></div>
+</div>
+
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<div id="main">
+  <div id="topbar">
+    <button id="menu-btn" onclick="toggleSidebar()">☰</button>
+    <h1>Groq File Agent</h1>
+    <button id="clear-btn" onclick="clearSession()">Clear chat</button>
+  </div>
+
+  <div id="messages">
+    <div class="msg-row agent">
+      <div class="bubble">Hello! I'm your File Agent powered by Groq. I can read, write, search, analyse and summarise files. What would you like to do?</div>
+    </div>
+  </div>
+
+  <div id="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+
+  <div id="inputbar">
+    <textarea id="input" rows="1" placeholder="Ask me anything about your files…"></textarea>
+    <button id="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+  const SESSION_ID = "session_" + Math.random().toString(36).slice(2, 10);
+
+  const messagesEl = document.getElementById("messages");
+  const inputEl    = document.getElementById("input");
+  const sendBtn    = document.getElementById("send-btn");
+  const typingEl   = document.getElementById("typing");
+
+  // ── Auto-grow textarea ──────────────────────────────────
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+  });
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // ── Sidebar toggle ──────────────────────────────────────
+  function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("open");
+    document.getElementById("overlay").classList.toggle("visible");
+  }
+  function closeSidebar() {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("overlay").classList.remove("visible");
+  }
+
+  // ── Append a message bubble ─────────────────────────────
+  function appendMessage(role, content, { tools = [], gemini = false } = {}) {
+    const row = document.createElement("div");
+    row.className = "msg-row " + role;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = content;
+    row.appendChild(bubble);
+
+    if (role === "agent" && (tools.length || gemini)) {
+      const meta = document.createElement("div");
+      meta.className = "msg-meta";
+
+      if (gemini) {
+        const b = document.createElement("span");
+        b.className = "badge gemini";
+        b.textContent = "✦ Gemini fallback";
+        meta.appendChild(b);
+      }
+
+      tools.forEach(t => {
+        const b = document.createElement("span");
+        b.className = "badge tool";
+        b.textContent = "🔧 " + t;
+        meta.appendChild(b);
+      });
+
+      row.appendChild(meta);
+    }
+
+    // insert before the typing indicator
+    messagesEl.insertBefore(row, typingEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ── Send a message ──────────────────────────────────────
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    sendBtn.disabled = true;
+
+    appendMessage("user", text);
+
+    typingEl.classList.add("visible");
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+      });
+      const data = await res.json();
+      typingEl.classList.remove("visible");
+
+      if (data.error) {
+        appendMessage("agent", "⚠️ Error: " + data.error);
+      } else {
+        appendMessage("agent", data.response, {
+          tools: data.tools_used || [],
+          gemini: data.gemini_used || false,
+        });
+      }
+    } catch (err) {
+      typingEl.classList.remove("visible");
+      appendMessage("agent", "⚠️ Network error: " + err.message);
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+      loadFiles();
+    }
+  }
+
+  // ── Clear session ───────────────────────────────────────
+  async function clearSession() {
+    await fetch("/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SESSION_ID }),
+    }).catch(() => {});
+
+    // Remove all messages except the welcome bubble
+    const rows = messagesEl.querySelectorAll(".msg-row");
+    rows.forEach((r, i) => { if (i > 0) r.remove(); });
+  }
+
+  // ── Load file browser ───────────────────────────────────
+  async function loadFiles() {
+    try {
+      const res = await fetch("/files?session_id=" + SESSION_ID);
+      const data = await res.json();
+      if (data.error) return;
+
+      document.getElementById("working-dir").textContent = data.working_directory || "—";
+
+      const list = document.getElementById("file-list");
+      list.innerHTML = "";
+
+      (data.files || []).forEach(f => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+
+        const icon = document.createElement("span");
+        icon.className = "icon";
+        icon.textContent = f.is_dir ? "📂" : fileIcon(f.name);
+
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = f.name;
+        name.title = f.name;
+
+        item.appendChild(icon);
+        item.appendChild(name);
+
+        if (!f.is_dir && f.size !== null) {
+          const sz = document.createElement("span");
+          sz.className = "size";
+          sz.textContent = formatBytes(f.size);
+          item.appendChild(sz);
+        }
+
+        list.appendChild(item);
+      });
+
+      if (!data.files || !data.files.length) {
+        list.innerHTML = '<div class="file-item"><span class="icon">—</span><span class="name">Empty directory</span></div>';
+      }
+    } catch (_) {}
+  }
+
+  function fileIcon(name) {
+    const ext = name.split(".").pop().toLowerCase();
+    const map = { py: "🐍", js: "📜", ts: "📜", json: "📋", md: "📝",
+                  txt: "📄", csv: "📊", yaml: "⚙️", yml: "⚙️",
+                  html: "🌐", css: "🎨", sh: "⚡", pdf: "📕" };
+    return map[ext] || "📄";
+  }
+
+  function formatBytes(b) {
+    if (b < 1024) return b + " B";
+    if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
+    return (b / 1048576).toFixed(1) + " MB";
+  }
+
+  // ── Init ────────────────────────────────────────────────
+  loadFiles();
+  inputEl.focus();
+</script>
+</body>
+</html>

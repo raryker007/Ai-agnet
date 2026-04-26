@@ -6,6 +6,7 @@ from pathlib import Path
 
 _MEMORY_FILE = Path(__file__).parent.parent / "memory.json"
 _MAX_INTENTS = 10
+_MAX_SUMMARIES = 3
 
 
 class SessionMemory:
@@ -15,6 +16,7 @@ class SessionMemory:
         self.files_touched: list[str] = []
         self.facts: dict[str, str] = {}
         self.last_session: str | None = None
+        self.conversation_summaries: list[str] = []
         self.loaded: bool = False
 
     def load_session(self) -> bool:
@@ -30,6 +32,7 @@ class SessionMemory:
         self.files_touched = data.get("files_touched", [])
         self.facts = data.get("facts", {})
         self.last_session = data.get("last_session")
+        self.conversation_summaries = data.get("conversation_summaries", [])[-_MAX_SUMMARIES:]
         self.loaded = True
         return True
 
@@ -37,6 +40,7 @@ class SessionMemory:
         self,
         new_intents: list[str] | None = None,
         new_files: list[str] | None = None,
+        conversation_summary: str | None = None,
     ) -> None:
         combined_intents = (self.user_intents + (new_intents or []))[-_MAX_INTENTS:]
 
@@ -47,17 +51,29 @@ class SessionMemory:
                 seen.add(f)
                 combined_files.append(f)
 
+        combined_summaries = list(self.conversation_summaries)
+        if conversation_summary:
+            combined_summaries.append(conversation_summary)
+        combined_summaries = combined_summaries[-_MAX_SUMMARIES:]
+
         payload = {
             "last_session": datetime.now().isoformat(timespec="seconds"),
             "user_intents": combined_intents,
             "files_touched": combined_files,
             "facts": self.facts,
+            "conversation_summaries": combined_summaries,
         }
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
         self.memory_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def add_fact(self, key: str, value: str) -> None:
         self.facts[key] = value
+
+    def get_context_for_prompt(self) -> str:
+        if not self.conversation_summaries:
+            return ""
+        parts = [f"Session {i + 1}: {s}" for i, s in enumerate(self.conversation_summaries[-_MAX_SUMMARIES:])]
+        return "## Previous Session Summaries\n" + "\n\n".join(parts)
 
     def context_summary(self) -> str:
         if not self.loaded:
